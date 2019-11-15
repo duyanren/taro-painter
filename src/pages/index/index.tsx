@@ -2,6 +2,7 @@ import Taro, { Component, Config } from "@tarojs/taro";
 import { View, Button } from "@tarojs/components";
 
 import Card from "../../palette/card";
+import Poster from "../../component/poster/index";
 import "./index.scss";
 
 interface IProps {}
@@ -19,45 +20,34 @@ export default class Index extends Component<IProps, IState> {
    * 提示和声明 navigationBarTextStyle: 'black' | 'white' 类型冲突, 需要显示声明类型
    */
   config: Config = {
-    navigationBarTitleText: "首页",
-    usingComponents: {
-      painter: "../../component/painter/painter"
-    }
+    navigationBarTitleText: "painter demo"
   };
   state: IState = {
-    template: {},
+    template: new Card().palette(),
     imagePath: ""
   };
-  onImgOK(e) {
-    const imagePath = e.detail.path;
+  // 图片生成成功回调
+  onImgOK = e => {
     this.setState({
-      imagePath
+      imagePath: e.path
     });
+  };
+  // 图片生成失败回调
+  onImgErr = error => {
     console.log(
-      "%cimagePath: ",
+      "%cerror: ",
       "color: MidnightBlue; background: Aquamarine; font-size: 20px;",
-      imagePath
+      error
     );
-  }
+  };
+  painterRef: Poster | null;
 
+  // 保存图片到本地相册
   saveImage() {
-    Taro.saveImageToPhotosAlbum({
-      filePath: this.state.imagePath
-    });
+    this.painterRef && this.painterRef.saveImage()
   }
 
   componentWillMount() {}
-
-  componentDidMount() {
-    console.log(
-      "%cnew Card().palette(): ",
-      "color: MidnightBlue; background: Aquamarine; font-size: 20px;",
-      new Card().palette()
-    );
-    this.setState({
-      template: new Card().palette()
-    });
-  }
 
   componentWillUnmount() {}
 
@@ -68,14 +58,13 @@ export default class Index extends Component<IProps, IState> {
   render() {
     return (
       <View className="index">
-        {
-          // @ts-ignore
-          <painter
-            customStyle="margin-left:40rpx"
-            palette={this.state.template}
-            onImgOK={this.onImgOK}
-          />
-        }
+        <Poster
+          customStyle="margin-left:40rpx"
+          palette={this.state.template}
+          onImgOK={this.onImgOK}
+          onImgErr={this.onImgErr}
+          ref={node => this.painterRef = node}
+        />
         <Button className="save-button" onClick={this.saveImage}>
           保存
         </Button>

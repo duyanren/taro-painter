@@ -158,7 +158,7 @@ function _image(index, rotate, borderRadius) {
   return (
     {
       type: 'image',
-      url: '/static/avatar.jpg',
+      url: 'https://statics-web.iqiyi.com/garden/miracle/head-icon.png',
       css: {
         top: `${startTop + 8.5 * gapSize}rpx`,
         left: `${startLeft + 160 * index}rpx`,

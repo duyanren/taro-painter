@@ -2,13 +2,13 @@
  * LRU 文件存储，使用该 downloader 可以让下载的文件存储在本地，下次进入小程序后可以直接使用
  * 详细设计文档可查看 https://juejin.im/post/5b42d3ede51d4519277b6ce3
  */
-const util = require('./util');
-
-const SAVED_FILES_KEY = 'savedFiles';
-const KEY_TOTAL_SIZE = 'totalSize';
-const KEY_PATH = 'path';
-const KEY_TIME = 'time';
-const KEY_SIZE = 'size';
+import Taro from "@tarojs/taro";
+import {isValidUrl} from './util' 
+const SAVED_FILES_KEY = "savedFiles";
+const KEY_TOTAL_SIZE = "totalSize";
+const KEY_PATH = "path";
+const KEY_TIME = "time";
+const KEY_SIZE = "size";
 
 // 可存储总共为 6M，目前小程序可允许的最大本地存储为 10M
 let MAX_SPACE_IN_B = 6 * 1024 * 1024;
@@ -17,17 +17,15 @@ let savedFiles = {};
 export default class Dowloader {
   constructor() {
     // app 如果设置了最大存储空间，则使用 app 中的
-    if (getApp().PAINTER_MAX_LRU_SPACE) {
-      MAX_SPACE_IN_B = getApp().PAINTER_MAX_LRU_SPACE;
+    if (Taro.getApp().PAINTER_MAX_LRU_SPACE) {
+      MAX_SPACE_IN_B = Taro.getApp().PAINTER_MAX_LRU_SPACE;
     }
-    wx.getStorage({
-      key: SAVED_FILES_KEY,
-      success: function (res) {
-        if (res.data) {
-          savedFiles = res.data;
-        }
-      },
-    });
+    try {
+      const res = Taro.getStorageSync(SAVED_FILES_KEY);
+      if (res) {
+        savedFiles = res;
+      }
+    } catch (error) {}
   }
 
   /**
@@ -36,7 +34,7 @@ export default class Dowloader {
    */
   download(url) {
     return new Promise((resolve, reject) => {
-      if (!(url && util.isValidUrl(url))) {
+      if (!(url && isValidUrl(url))) {
         resolve(url);
         return;
       }
@@ -44,26 +42,34 @@ export default class Dowloader {
 
       if (file) {
         // 检查文件是否正常，不正常需要重新下载
-        wx.getSavedFileInfo({
+        Taro.getSavedFileInfo({
           filePath: file[KEY_PATH],
-          success: (res) => {
+          success: res => {
             resolve(file[KEY_PATH]);
           },
-          fail: (error) => {
-            console.error(`the file is broken, redownload it, ${JSON.stringify(error)}`);
-            downloadFile(url).then((path) => {
-              resolve(path);
-            }, () => {
-              reject();
-            });
-          },
+          fail: error => {
+            console.error(
+              `the file is broken, redownload it, ${JSON.stringify(error)}`
+            );
+            downloadFile(url).then(
+              path => {
+                resolve(path);
+              },
+              () => {
+                reject();
+              }
+            );
+          }
         });
       } else {
-        downloadFile(url).then((path) => {
-          resolve(path);
-        }, () => {
-          reject();
-        });
+        downloadFile(url).then(
+          path => {
+            resolve(path);
+          },
+          () => {
+            reject();
+          }
+        );
       }
     });
   }
@@ -71,66 +77,77 @@ export default class Dowloader {
 
 function downloadFile(url) {
   return new Promise((resolve, reject) => {
-    wx.downloadFile({
+    Taro.downloadFile({
       url: url,
-      success: function (res) {
+      success: function(res) {
         if (res.statusCode !== 200) {
           console.error(`downloadFile ${url} failed res.statusCode is not 200`);
           reject();
           return;
         }
         const { tempFilePath } = res;
-        wx.getFileInfo({
+        Taro.getFileInfo({
           filePath: tempFilePath,
-          success: (tmpRes) => {
+          success: tmpRes => {
             const newFileSize = tmpRes.size;
-            doLru(newFileSize).then(() => {
-              saveFile(url, newFileSize, tempFilePath).then((filePath) => {
-                resolve(filePath);
-              });
-            }, () => {
-              resolve(tempFilePath);
-            });
+            doLru(newFileSize).then(
+              () => {
+                saveFile(url, newFileSize, tempFilePath).then(filePath => {
+                  resolve(filePath);
+                });
+              },
+              () => {
+                resolve(tempFilePath);
+              }
+            );
           },
-          fail: (error) => {
-          // 文件大小信息获取失败，则此文件也不要进行存储
-            console.error(`getFileInfo ${res.tempFilePath} failed, ${JSON.stringify(error)}`);
+          fail: error => {
+            // 文件大小信息获取失败，则此文件也不要进行存储
+            console.error(
+              `getFileInfo ${res.tempFilePath} failed, ${JSON.stringify(error)}`
+            );
             resolve(res.tempFilePath);
-          },
+          }
         });
       },
-      fail: function (error) {
+      fail: function(error) {
         console.error(`downloadFile failed, ${JSON.stringify(error)} `);
         reject();
-      },
+      }
     });
   });
 }
 
 function saveFile(key, newFileSize, tempFilePath) {
   return new Promise((resolve, reject) => {
-    wx.saveFile({
+    Taro.saveFile({
       tempFilePath: tempFilePath,
-      success: (fileRes) => {
-        const totalSize = savedFiles[KEY_TOTAL_SIZE] ? savedFiles[KEY_TOTAL_SIZE] : 0;
+      success: fileRes => {
+        const totalSize = savedFiles[KEY_TOTAL_SIZE]
+          ? savedFiles[KEY_TOTAL_SIZE]
+          : 0;
         savedFiles[key] = {};
         savedFiles[key][KEY_PATH] = fileRes.savedFilePath;
         savedFiles[key][KEY_TIME] = new Date().getTime();
         savedFiles[key][KEY_SIZE] = newFileSize;
-        savedFiles['totalSize'] = newFileSize + totalSize;
-        wx.setStorage({
+        savedFiles["totalSize"] = newFileSize + totalSize;
+        Taro.setStorage({
           key: SAVED_FILES_KEY,
-          data: savedFiles,
+          data: savedFiles
         });
         resolve(fileRes.savedFilePath);
       },
-      fail: (error) => {
-        console.error(`saveFile ${key} failed, then we delete all files, ${JSON.stringify(error)}`);
+      fail: error => {
+        console.error(
+          `saveFile ${key} failed, then we delete all files, ${JSON.stringify(
+            error
+          )}`
+        );
         // 由于 saveFile 成功后，res.tempFilePath 处的文件会被移除，所以在存储未成功时，我们还是继续使用临时文件
         resolve(tempFilePath);
         // 如果出现错误，就直接情况本地的所有文件，因为你不知道是不是因为哪次lru的某个文件未删除成功
         reset();
-      },
+      }
     });
   });
 }
@@ -139,18 +156,18 @@ function saveFile(key, newFileSize, tempFilePath) {
  * 清空所有下载相关内容
  */
 function reset() {
-  wx.removeStorage({
+  Taro.removeStorage({
     key: SAVED_FILES_KEY,
     success: () => {
-      wx.getSavedFileList({
-        success: (listRes) => {
+      Taro.getSavedFileList({
+        success: listRes => {
           removeFiles(listRes.fileList);
         },
-        fail: (getError) => {
+        fail: getError => {
           console.error(`getSavedFileList failed, ${JSON.stringify(getError)}`);
-        },
+        }
       });
-    },
+    }
   });
 }
 
@@ -180,22 +197,22 @@ function doLru(size) {
       }
     }
 
-    savedFiles['totalSize'] = totalSize;
+    savedFiles["totalSize"] = totalSize;
 
-    wx.setStorage({
+    Taro.setStorage({
       key: SAVED_FILES_KEY,
       data: savedFiles,
       success: () => {
-      // 保证 storage 中不会存在不存在的文件数据
+        // 保证 storage 中不会存在不存在的文件数据
         if (pathsShouldDelete.length > 0) {
           removeFiles(pathsShouldDelete);
         }
         resolve();
       },
-      fail: (error) => {
+      fail: error => {
         console.error(`doLru setStorage failed, ${JSON.stringify(error)}`);
         reject();
-      },
+      }
     });
   });
 }
@@ -203,14 +220,16 @@ function doLru(size) {
 function removeFiles(pathsShouldDelete) {
   for (const pathDel of pathsShouldDelete) {
     let delPath = pathDel;
-    if (typeof pathDel === 'object') {
+    if (typeof pathDel === "object") {
       delPath = pathDel.filePath;
     }
-    wx.removeSavedFile({
+    Taro.removeSavedFile({
       filePath: delPath,
-      fail: (error) => {
-        console.error(`removeSavedFile ${pathDel} failed, ${JSON.stringify(error)}`);
-      },
+      fail: error => {
+        console.error(
+          `removeSavedFile ${pathDel} failed, ${JSON.stringify(error)}`
+        );
+      }
     });
   }
 }
@@ -219,10 +238,10 @@ function getFile(key) {
   if (!savedFiles[key]) {
     return;
   }
-  savedFiles[key]['time'] = new Date().getTime();
-  wx.setStorage({
+  savedFiles[key]["time"] = new Date().getTime();
+  Taro.setStorage({
     key: SAVED_FILES_KEY,
-    data: savedFiles,
+    data: savedFiles
   });
   return savedFiles[key];
 }

@@ -1,0 +1,8 @@
+{
+  "developType": "normal",
+  "editor": { "curPath": "", "expands": [], "markdownUploadTimeMap": {}, "paths": [], "recentlyFiles": [] },
+  "host": "baiduboxapp",
+  "appid": "16292354",
+  "setting": { "urlCheck": true },
+  "swan": { "baiduboxapp": { "swanJsVersion": "3.90.5", "extensionJsVersion": "1.4.0" } }
+}
